@@ -1,0 +1,19 @@
+var i;
+procedure p;
+begin
+    i := 1;
+    if i>1 then begin
+        i := 1;
+        i := i + 1;
+    end;
+    else begin
+        i := i * 5;
+        i := 233;
+    end;
+    i := 2;
+end;
+
+begin
+    i := 1;
+    call p;
+end.

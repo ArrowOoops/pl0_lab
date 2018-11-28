@@ -1,3 +1,4 @@
+// pl0 compiler source code
 
 #pragma warning(disable:4996)
 
@@ -24,6 +25,7 @@ void error(int n)
 	err++;
 } // error
 
+/****************************** 词法分析 ******************************/
 //////////////////////////////////////////////////////////////////////
 void getch(void)
 {
@@ -154,6 +156,7 @@ void getsym(void)
 	}
 } // getsym
 
+/********************************************************************/
 //////////////////////////////////////////////////////////////////////
 // generates (assembles) an instruction.
 void gen(int x, int y, int z)
@@ -290,9 +293,11 @@ void factor(symset fsys)
 	void expression(symset fsys);
 	int i;
 	symset set;
+	mask* mk;
 	
 	test(facbegsys, fsys, 24); // The symbol can not be as the beginning of an expression.
 
+	// printf("%d>>>>>\n", sym);
 	if (inset(sym, facbegsys))
 	{
 		if (sym == SYM_IDENTIFIER)
@@ -303,6 +308,7 @@ void factor(symset fsys)
 			}
 			else
 			{
+				last_i[id_counter++] = i; // id的地址
 				switch (table[i].kind)
 				{
 					mask* mk;
@@ -347,9 +353,27 @@ void factor(symset fsys)
 		}
 		else if(sym == SYM_MINUS) // UMINUS,  Expr -> '-' Expr
 		{  
-			 getsym();
-			 factor(fsys);
-			 gen(OPR, 0, OPR_NEG);
+			getsym();
+			factor(fsys);
+			gen(OPR, 0, OPR_NEG);
+		}
+		if (sym == SYM_BECOMES) // 连续赋值，
+		{
+			if (!(i = position(id)))
+			{
+				error(11); // Undeclared identifier.
+			}
+			mk = (mask *)&table[i]; // 前一个数
+
+			getsym();
+			expression(fsys);
+			gen(STO, level - mk->level, mk->address);
+			if (!(i = position(id)))
+			{
+				error(11); // Undeclared identifier.
+			}
+			mk = (mask *)&table[i]; // 前一个数
+			gen(LOD, level - mk->level, mk->address);
 		}
 		test(fsys, createset(SYM_LPAREN, SYM_NULL), 23);
 	} // if
@@ -403,7 +427,6 @@ void expression(symset fsys)
 			gen(OPR, 0, OPR_MIN);
 		}
 	} // while
-
 	destroyset(set);
 } // expression
 
@@ -461,7 +484,7 @@ void condition(symset fsys)
 //////////////////////////////////////////////////////////////////////
 void statement(symset fsys)
 {
-	int i, cx1, cx2;
+	int i, cx1, cx2, cx3;
 	symset set1, set;
 
 	if (sym == SYM_IDENTIFIER)
@@ -487,6 +510,8 @@ void statement(symset fsys)
 		}
 		expression(fsys);
 		mk = (mask*) &table[i];
+		
+		// global_mk = (mask*) &table[i];
 		if (i)
 		{
 			gen(STO, level - mk->level, mk->address);
@@ -520,6 +545,7 @@ void statement(symset fsys)
 	} 
 	else if (sym == SYM_IF)
 	{ // if statement
+		// printf("%d<<<<<<<<<<<<\n", sym);
 		getsym();
 		set1 = createset(SYM_THEN, SYM_DO, SYM_NULL);
 		set = uniteset(set1, fsys);
@@ -534,13 +560,29 @@ void statement(symset fsys)
 		{
 			error(16); // 'then' expected.
 		}
-		cx1 = cx;
-		gen(JPC, 0, 0);
+		cx1 = cx; // 保存当前指令地址
+		gen(JPC, 0, 0); // 生成条件跳转指令，地址未知，先零
+
+		statement(fsys); // 处理then之后的语句
+		// code[cx1].a = cx; // 条件不成立要跳转的指令地址
+
+		cx3 = cx; // JMP语句地址
+		gen(JMP, 0, 0); // 无条件跳转，跳到else语句后面
+		code[cx1].a = cx; // // 条件不成立要跳转的指令地址
+		// current symbol get the semicolon
+
+		getsym(); // read next
+		if (sym == SYM_ELSE) // then后语句处理完以后，看是否是else
+		{
+			getsym();
+			statement(fsys);
+		}
+		code[cx3].a = cx; // else后语句结束时的位置，if语句结束后跳到这里
 		statement(fsys);
-		code[cx1].a = cx;	
 	}
 	else if (sym == SYM_BEGIN)
 	{ // block
+		part_counter++;
 		getsym();
 		set1 = createset(SYM_SEMICOLON, SYM_END, SYM_NULL);
 		set = uniteset(set1, fsys);
@@ -561,6 +603,11 @@ void statement(symset fsys)
 		destroyset(set);
 		if (sym == SYM_END)
 		{
+			if (loop_counter > 0 && part_counter-- == loop_counter+1)
+			{
+				printf("%d\n", cx);
+				ends_cx[--loop_counter] = cx + 1; //这里end还有一个返回语句，所以是下一条
+			}
 			getsym();
 		}
 		else
@@ -570,15 +617,18 @@ void statement(symset fsys)
 	}
 	else if (sym == SYM_WHILE)
 	{ // while statement
+		begins_cx[loop_counter++] = cx;
+		loop_break_max++;
+		loop_continue_max++;
 		cx1 = cx;
 		getsym();
 		set1 = createset(SYM_DO, SYM_NULL);
 		set = uniteset(set1, fsys);
-		condition(set);
+		condition(set); 
 		destroyset(set1);
 		destroyset(set);
-		cx2 = cx;
-		gen(JPC, 0, 0);
+		cx2 = cx; // 保留条件判断的位置
+		gen(JPC, 0, 0); // 条件不成立则跳转
 		if (sym == SYM_DO)
 		{
 			getsym();
@@ -588,8 +638,31 @@ void statement(symset fsys)
 			error(18); // 'do' expected.
 		}
 		statement(fsys);
-		gen(JMP, 0, cx1);
+		gen(JMP, 0, cx1); // 返回到条件判断的地方
 		code[cx2].a = cx;
+		// put here for break words
+		if (break_cx[--break_counter] > 0)
+		{
+			code[break_cx[break_counter]].a = ends_cx[--loop_break_max];
+		}
+		if (continue_cx[--continue_counter] > 0)
+		{
+			code[continue_cx[continue_counter]].a = begins_cx[--loop_continue_max]; // 条件判断的开始
+		}
+	}
+	else if (sym == SYM_BREAK)
+	{ // break
+		getsym(); // 读进";"
+		break_cx[break_counter++] = cx;
+		gen(JMP, 0, 0);
+		statement(fsys);
+	}
+	else if (sym == SYM_CONTINUE)
+	{ // continue
+		getsym(); // delate ";"
+		continue_cx[continue_counter++] = cx;
+		gen(JMP, 0, 0);
+		statement(fsys);
 	}
 	test(fsys, phi, 19);
 } // statement
@@ -672,7 +745,6 @@ void block(symset fsys)
 			{
 				error(4); // There must be an identifier to follow 'const', 'var', or 'procedure'.
 			}
-
 
 			if (sym == SYM_SEMICOLON)
 			{
@@ -861,7 +933,7 @@ void interpret()
 } // interpret
 
 //////////////////////////////////////////////////////////////////////
-void main ()
+int main ()
 {
 	FILE* hbin;
 	char s[80];
@@ -882,7 +954,7 @@ void main ()
 	// create begin symbol sets
 	declbegsys = createset(SYM_CONST, SYM_VAR, SYM_PROCEDURE, SYM_NULL);
 	statbegsys = createset(SYM_BEGIN, SYM_CALL, SYM_IF, SYM_WHILE, SYM_NULL);
-	facbegsys = createset(SYM_IDENTIFIER, SYM_NUMBER, SYM_LPAREN, SYM_MINUS, SYM_NULL);
+	facbegsys = createset(SYM_IDENTIFIER, SYM_NUMBER, SYM_LPAREN, SYM_MINUS, SYM_BECOMES, SYM_NULL);
 
 	err = cc = cx = ll = 0; // initialize global variables
 	ch = ' ';
@@ -917,6 +989,7 @@ void main ()
 	else
 		printf("There are %d error(s) in PL/0 program.\n", err);
 	listcode(0, cx);
+	return 0;
 } // main
 
 //////////////////////////////////////////////////////////////////////

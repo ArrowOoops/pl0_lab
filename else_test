@@ -1,0 +1,5 @@
+var i, j;
+begin
+	i := 2;
+	if odd i then j:= 1 else j:=2;
+end;

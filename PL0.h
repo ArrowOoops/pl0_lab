@@ -1,6 +1,6 @@
 #include <stdio.h>
 
-#define NRW        11     // number of reserved words
+#define NRW        14     // number of reserved words
 #define TXMAX      500    // length of identifier table
 #define MAXNUMLEN  14     // maximum number of digits in numbers
 #define NSYM       10     // maximum number of symbols in array ssym and csym
@@ -16,8 +16,8 @@
 
 enum symtype
 {
-	SYM_NULL,
-	SYM_IDENTIFIER,
+	SYM_NULL, 								//0
+	SYM_IDENTIFIER,						
 	SYM_NUMBER,
 	SYM_PLUS,
 	SYM_MINUS,
@@ -26,17 +26,17 @@ enum symtype
 	SYM_ODD,
 	SYM_EQU,
 	SYM_NEQ,
-	SYM_LES,
+	SYM_LES,			//10
 	SYM_LEQ,
 	SYM_GTR,
 	SYM_GEQ,
 	SYM_LPAREN,
 	SYM_RPAREN,
 	SYM_COMMA,
-	SYM_SEMICOLON,
+	SYM_SEMICOLON,		// 17
 	SYM_PERIOD,
 	SYM_BECOMES,
-    SYM_BEGIN,
+	SYM_BEGIN,  //20
 	SYM_END,
 	SYM_IF,
 	SYM_THEN,
@@ -45,7 +45,10 @@ enum symtype
 	SYM_CALL,
 	SYM_CONST,
 	SYM_VAR,
-	SYM_PROCEDURE
+	SYM_PROCEDURE,					
+	SYM_ELSE,  /* 新增的指令 */   //30
+	SYM_BREAK,
+	SYM_CONTINUE
 };
 
 enum idtype
@@ -125,6 +128,28 @@ int  cx;         // index of current instruction to be generated.
 int  level = 0;
 int  tx = 0;
 
+/***************new added variable********************/
+int break_counter = 0;
+int break_cx[5] = {0};
+
+int continue_counter = 0;
+int continue_cx[5] = {0};
+
+int loop_counter = 0;
+int part_counter = 0;
+int loop_break_max = 0;
+int loop_continue_max = 0;
+int ends_cx[5] = {0};
+int begins_cx[5] = {0};
+
+int becomes_cx[5] = {0};
+int becomes_counter = 0;
+
+int last_i[5] = { 0 };
+int id_counter = 0;
+int id_list[5] = { 0 };
+/********************************************/
+
 char line[80];
 
 instruction code[CXMAX];
@@ -133,13 +158,15 @@ char* word[NRW + 1] =
 {
 	"", /* place holder */
 	"begin", "call", "const", "do", "end","if",
-	"odd", "procedure", "then", "var", "while"
+	"odd", "procedure", "then", "var", "while", 
+	"else", "break", "continue" /* extended */
 };
 
 int wsym[NRW + 1] =
 {
 	SYM_NULL, SYM_BEGIN, SYM_CALL, SYM_CONST, SYM_DO, SYM_END,
-	SYM_IF, SYM_ODD, SYM_PROCEDURE, SYM_THEN, SYM_VAR, SYM_WHILE
+	SYM_IF, SYM_ODD, SYM_PROCEDURE, SYM_THEN, SYM_VAR, SYM_WHILE,
+	SYM_ELSE, SYM_BREAK, SYM_CONTINUE /* 新增保留字 */
 };
 
 int ssym[NSYM + 1] =
@@ -177,5 +204,6 @@ typedef struct
 } mask;
 
 FILE* infile;
+
 
 // EOF PL0.h

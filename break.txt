@@ -1,0 +1,13 @@
+var i, j;
+begin
+    i := 0;
+    while i < 15 do begin
+        if i = 10 then begin
+            i := 100;
+            break;
+        end;
+        i := i + 2;
+    end;
+    i := i + 233;
+    j := 322;
+end. 

@@ -1,0 +1,12 @@
+var i, j;
+begin
+    i := 0;
+    while i < 20 do begin
+        if i <= 10 then begin
+            i := i + 5;
+            continue;
+        end;
+        i := i + 2;
+    end;
+    j := i + 1;
+end. 
